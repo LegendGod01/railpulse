@@ -343,7 +343,7 @@ function initStations() {
     const list = await getTrainsBetween(from, to);
     addRecent({ type: "between", label: `${from} → ${to}` });
     out.innerHTML = `
-      <div class="notice">Sample results for ${esc(from)} → ${esc(to)} — live search needs a between-stations API subscription.</div>
+      ${list.demo ? `<div class="notice">Sample results for ${esc(from)} → ${esc(to)} — live search unavailable${lastApiError ? ` (${esc(lastApiError)})` : ""}.</div>` : ""}
       ${list.map((t) => `
         <div class="row-card">
           <div class="row-main">
@@ -362,7 +362,7 @@ function initStations() {
     skeletons(out, ["md", "md", "md"]);
     const list = await getStationBoard(code);
     out.innerHTML = `
-      <div class="notice">Sample board for ${esc(code)} — live boards need a station-board API subscription.</div>
+      ${list.demo ? `<div class="notice">Sample board for ${esc(code)} — live board unavailable${lastApiError ? ` (${esc(lastApiError)})` : ""}.</div>` : ""}
       ${list.map((t) => `
         <div class="row-card">
           <div class="row-main">
@@ -408,7 +408,7 @@ function initStations() {
     skeletons(out, ["md", "md", "md"]);
     const list = await getSeatAvailability(no, cls);
     out.innerHTML = `
-      <div class="notice">Sample availability for ${esc(no)} · ${esc(cls)} — live data needs a seat-availability API subscription.</div>
+      ${list.demo ? `<div class="notice">Sample availability for ${esc(no)} · ${esc(cls)} — live data unavailable${lastApiError ? ` (${esc(lastApiError)})` : ""}.</div>` : ""}
       ${list.map((s) => `
         <div class="row-card">
           <div class="row-main"><div class="row-title">${esc(s.date)}</div></div>
@@ -424,7 +424,7 @@ function initStations() {
     skeletons(out, ["md", "md"]);
     const list = await getFares(no);
     out.innerHTML = `
-      <div class="notice">Sample fares for ${esc(no)} — live fares need a fare API subscription.</div>
+      ${list.demo ? `<div class="notice">Sample fares for ${esc(no)} — live fares unavailable${lastApiError ? ` (${esc(lastApiError)})` : ""}.</div>` : ""}
       ${list.map((f) => `
         <div class="row-card">
           <div class="row-main"><div class="row-title">${esc(f.cls)} class</div></div>
