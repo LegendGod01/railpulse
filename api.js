@@ -240,12 +240,63 @@ function normalizeTrainsBetween(raw) {
 }
 
 /* ------------------------------------------------------------
-   Features without a dedicated API on the current plan —
-   served from the bundled dataset.
+   Seat Availability & Fare (Powered by RailKit API)
    ------------------------------------------------------------ */
-async function getNearbyStations(){ await fakeDelay(); return DEMO.nearby; }
-async function getSeatAvailability() { await fakeDelay(); return DEMO.seats; }
-async function getFares() { await fakeDelay(); return DEMO.fares; }
+async function getSeatAvailability(train, cls) {
+  if (IS_DEMO) { await fakeDelay(); return DEMO.seats; }
+  try {
+    // UI does not have From, To, and Date inputs.
+    // Fetching train route to set tomorrow's date dynamically.
+    const info = await getTrainInfo(train);
+    const from = info.source;
+    const to = info.destination;
+    
+    const tmrw = new Date();
+    tmrw.setDate(tmrw.getDate() + 1);
+    const date = `${String(tmrw.getDate()).padStart(2, '0')}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${tmrw.getFullYear()}`;
+
+    const res = await fetch(`/api/railkit?action=seats&train=${train}&from=${from}&to=${to}&date=${date}&cls=${cls}&quota=GN`);
+    const raw = await res.json();
+    
+    const data = raw?.data || raw || [];
+    if (!Array.isArray(data)) return [];
+    
+    return data.map(item => ({
+      date: pick(item.date, item.journeyDate, "--"),
+      status: pick(item.status, item.currentStatus, "N/A"),
+      chance: pick(item.probability, item.confirmationChance, ""),
+    }));
+  } catch (error) {
+    console.error("Seats API failed:", error);
+    return DEMO.seats;
+  }
+}
+
+async function getFares(train) {
+  if (IS_DEMO) { await fakeDelay(); return DEMO.fares; }
+  try {
+    const info = await getTrainInfo(train);
+    const from = info.source;
+    const to = info.destination;
+    const cls = "3A"; // Default class
+    
+    const res = await fetch(`/api/railkit?action=fare&train=${train}&from=${from}&to=${to}&cls=${cls}&quota=GN`);
+    const raw = await res.json();
+    
+    const d = raw?.data || raw || {};
+    return [
+      { label: "Base Fare", value: `₹${pick(d.baseFare, d.base_fare, 0)}` },
+      { label: "Reservation", value: `₹${pick(d.reservationCharge, d.reservation_charge, 0)}` },
+      { label: "Superfast", value: `₹${pick(d.superfastCharge, d.superfast_charge, 0)}` },
+      { label: "GST", value: `₹${pick(d.gst, d.tax, 0)}` },
+      { label: "Total", value: `₹${pick(d.totalFare, d.total_fare, d.total, 0)}`, isTotal: true }
+    ];
+  } catch (error) {
+    console.error("Fare API failed:", error);
+    return DEMO.fares;
+  }
+}
+
 async function getAlerts() { return DEMO.alerts; }
 
 /** Small artificial latency so loading skeletons are visible. */
