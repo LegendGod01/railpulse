@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RailPulse — Indian Railway Live Tracker</title>
+  <meta name="description" content="Live train status, PNR status, schedules, routes, seat availability and more. All-in-one Indian Railway travel companion." />
+  <meta name="theme-color" content="#0b0f1a" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ======================= APP HEADER ======================= -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 15.5V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9.5a2.5 2.5 0 0 1-2.5 2.5H6.5A2.5 2.5 0 0 1 4 15.5Z" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M4 10h16" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="8.5" cy="14.5" r="1.2" fill="currentColor"/>
+          <circle cx="15.5" cy="14.5" r="1.2" fill="currentColor"/>
+          <path d="M7 21l2-3M17 21l-2-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1 class="brand-name">RailPulse</h1>
+          <p class="brand-tag">Indian Railway companion</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="apiModeBadge" class="badge badge-warn" title="Add your RapidAPI key in config.js to go live">DEMO</span>
+        <button id="themeToggle" class="icon-btn" aria-label="Toggle dark mode">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ======================= HOME VIEW ======================= -->
+    <section id="view-home" class="view is-active" aria-label="Home">
+      <div class="hero glass-card">
+        <h2 class="hero-title text-balance">Where is my train?</h2>
+        <p class="hero-sub">Track any Indian Railways train live, check PNR, schedules, fares &amp; more.</p>
+        <div class="quick-grid" id="quickActions">
+          <button class="quick-tile" data-goto="live">
+            <span class="quick-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <span>Live Status</span>
+          </button>
+          <button class="quick-tile" data-goto="pnr">
+            <span class="quick-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h18M8 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <span>PNR Status</span>
+          </button>
+          <button class="quick-tile" data-goto="trains">
+            <span class="quick-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <span>Train Search</span>
+          </button>
+          <button class="quick-tile" data-goto="stations">
+            <span class="quick-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h16M6 20V8l6-4 6 4v12" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <span>Stations</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Favorites -->
+      <div class="section-block">
+        <div class="section-head">
+          <h3 class="section-title">Favorites</h3>
+          <button id="clearFavs" class="link-btn">Clear</button>
+        </div>
+        <div id="favList" class="chip-row" aria-live="polite"></div>
+      </div>
+
+      <!-- Recent searches -->
+      <div class="section-block">
+        <div class="section-head">
+          <h3 class="section-title">Recent searches</h3>
+          <button id="clearRecents" class="link-btn">Clear</button>
+        </div>
+        <div id="recentList" class="chip-row" aria-live="polite"></div>
+      </div>
+
+      <!-- Alerts: cancelled / diverted / rescheduled -->
+      <div class="section-block">
+        <div class="section-head">
+          <h3 class="section-title">Cancelled · Diverted · Rescheduled</h3>
+        </div>
+        <div id="alertsList" class="stack"></div>
+      </div>
+    </section>
+
+    <!-- ======================= LIVE TRAIN VIEW ======================= -->
+    <section id="view-live" class="view" aria-label="Live train status">
+      <form id="liveForm" class="search-card glass-card" autocomplete="off">
+        <div class="field-row">
+          <div class="field grow">
+            <label for="liveTrainNo">Train number</label>
+            <input id="liveTrainNo" inputmode="numeric" pattern="\d{5}" maxlength="5" placeholder="e.g. 12951" required />
+          </div>
+          <div class="field">
+            <label for="liveDate">Departure date</label>
+            <input id="liveDate" type="date" required />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+          Track train
+        </button>
+      </form>
+      <div id="liveResult" class="stack" aria-live="polite"></div>
+    </section>
+
+    <!-- ======================= PNR VIEW ======================= -->
+    <section id="view-pnr" class="view" aria-label="PNR status">
+      <form id="pnrForm" class="search-card glass-card" autocomplete="off">
+        <div class="field">
+          <label for="pnrInput">PNR number</label>
+          <input id="pnrInput" inputmode="numeric" pattern="\d{10}" maxlength="10" placeholder="10-digit PNR" required />
+        </div>
+        <button type="submit" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h18M8 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Check PNR
+        </button>
+      </form>
+      <div id="pnrResult" class="stack" aria-live="polite"></div>
+    </section>
+
+    <!-- ======================= TRAINS VIEW (search / schedule / route / coach) ======================= -->
+    <section id="view-trains" class="view" aria-label="Train search and schedule">
+      <form id="trainForm" class="search-card glass-card" autocomplete="off">
+        <div class="field">
+          <label for="trainNoInput">Train number</label>
+          <input id="trainNoInput" inputmode="numeric" pattern="\d{5}" maxlength="5" placeholder="e.g. 12951" required />
+        </div>
+        <button type="submit" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Search train
+        </button>
+      </form>
+      <div id="trainResult" class="stack" aria-live="polite"></div>
+    </section>
+
+    <!-- ======================= STATIONS VIEW (between / board / nearby / seats / fare) ======================= -->
+    <section id="view-stations" class="view" aria-label="Station tools">
+      <div class="tool-tabs" role="tablist" aria-label="Station tools">
+        <button class="tool-tab is-active" data-tool="between" role="tab" aria-selected="true">Between</button>
+        <button class="tool-tab" data-tool="board" role="tab" aria-selected="false">Board</button>
+        <button class="tool-tab" data-tool="nearby" role="tab" aria-selected="false">Nearby</button>
+        <button class="tool-tab" data-tool="seats" role="tab" aria-selected="false">Seats</button>
+        <button class="tool-tab" data-tool="fare" role="tab" aria-selected="false">Fare</button>
+      </div>
+
+      <!-- Trains between stations -->
+      <div id="tool-between" class="tool-panel is-active">
+        <form id="betweenForm" class="search-card glass-card" autocomplete="off">
+          <div class="field-row">
+            <div class="field grow">
+              <label for="fromStation">From</label>
+              <input id="fromStation" placeholder="NDLS" maxlength="5" required />
+            </div>
+            <button type="button" id="swapStations" class="icon-btn swap-btn" aria-label="Swap stations">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v13m0 0-3-3m3 3 3-3M17 20V7m0 0-3 3m3-3 3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="field grow">
+              <label for="toStation">To</label>
+              <input id="toStation" placeholder="BCT" maxlength="5" required />
+            </div>
+          </div>
+          <button type="submit" class="btn-primary">Find trains</button>
+        </form>
+        <div id="betweenResult" class="stack" aria-live="polite"></div>
+      </div>
+
+      <!-- Arrival / departure board -->
+      <div id="tool-board" class="tool-panel">
+        <form id="boardForm" class="search-card glass-card" autocomplete="off">
+          <div class="field">
+            <label for="boardStation">Station code</label>
+            <input id="boardStation" placeholder="NDLS" maxlength="5" required />
+          </div>
+          <button type="submit" class="btn-primary">Show board</button>
+        </form>
+        <div id="boardResult" class="stack" aria-live="polite"></div>
+      </div>
+
+      <!-- Nearby stations -->
+      <div id="tool-nearby" class="tool-panel">
+        <div class="search-card glass-card">
+          <p class="muted">Find railway stations near your current location.</p>
+          <button id="nearbyBtn" class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            Locate me
+          </button>
+        </div>
+        <div id="nearbyResult" class="stack" aria-live="polite"></div>
+      </div>
+
+      <!-- Seat availability -->
+      <div id="tool-seats" class="tool-panel">
+        <form id="seatForm" class="search-card glass-card" autocomplete="off">
+          <div class="field-row">
+            <div class="field grow">
+              <label for="seatTrain">Train number</label>
+              <input id="seatTrain" inputmode="numeric" maxlength="5" placeholder="12951" required />
+            </div>
+            <div class="field">
+              <label for="seatClass">Class</label>
+              <select id="seatClass">
+                <option value="SL">SL</option><option value="3A">3A</option>
+                <option value="2A">2A</option><option value="1A">1A</option>
+                <option value="CC">CC</option><option value="EC">EC</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary">Check availability</button>
+        </form>
+        <div id="seatResult" class="stack" aria-live="polite"></div>
+      </div>
+
+      <!-- Fare enquiry -->
+      <div id="tool-fare" class="tool-panel">
+        <form id="fareForm" class="search-card glass-card" autocomplete="off">
+          <div class="field">
+            <label for="fareTrain">Train number</label>
+            <input id="fareTrain" inputmode="numeric" maxlength="5" placeholder="12951" required />
+          </div>
+          <button type="submit" class="btn-primary">Get fares</button>
+        </form>
+        <div id="fareResult" class="stack" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================= BOTTOM NAVIGATION ======================= -->
+  <nav class="bottom-nav" aria-label="Primary">
+    <button class="nav-item is-active" data-view="home" aria-label="Home">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="nav-item" data-view="live" aria-label="Live train">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span>Live</span>
+    </button>
+    <button class="nav-item" data-view="pnr" aria-label="PNR status">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h18M8 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>PNR</span>
+    </button>
+    <button class="nav-item" data-view="trains" aria-label="Trains">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 15.5V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9.5a2.5 2.5 0 0 1-2.5 2.5H6.5A2.5 2.5 0 0 1 4 15.5Z" stroke="currentColor" stroke-width="1.6"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1.2" fill="currentColor"/></svg>
+      <span>Trains</span>
+    </button>
+    <button class="nav-item" data-view="stations" aria-label="Stations">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h16M6 20V8l6-4 6 4v12" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span>Stations</span>
+    </button>
+  </nav>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Scripts: order matters (plain scripts, GitHub Pages friendly) -->
+  <script src="config.js"></script>
+  <script src="demo-data.js"></script>
+  <script src="api.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
