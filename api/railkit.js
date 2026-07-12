@@ -1,7 +1,8 @@
 import { configure, getAvailability, fareLookup, searchTrains } from "railkit";
 
 export default async function handler(req, res) {
-  configure("railkit_1aa8673844c151bdcb5fe3649a97ad4afda29d802f38fee7");
+  const key = process.env.RAILKIT_KEY || "railkit_1aa8673844c151bdcb5fe3649a97ad4afda29d802f38fee7";
+  configure(key);
 
   const { action, train, from, to, date, cls, quota } = req.query;
 
@@ -24,6 +25,8 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: "Invalid action" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // Log full detail server-side; return message so the client can show a real reason
+    console.error("RailKit error:", error);
+    return res.status(500).json({ error: error.message || "RailKit request failed" });
   }
 }
