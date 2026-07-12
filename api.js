@@ -1,8 +1,7 @@
 /* ============================================================
-   API layer — wraps the existing RapidAPI endpoints with the
+   API layer — wraps the existing RapidAPI/RailRadar endpoints with the
    Fetch API and normalizes responses into simple objects that
-   the UI can render. Falls back to demo data when no key is
-   configured or a request fails.
+   the UI can render.
    ============================================================ */
 
 /** Perform a RapidAPI GET request (Used for PNR Status) */
@@ -18,7 +17,7 @@ async function rapidFetch(url, host) {
   return res.json();
 }
 
-/** Perform a RailRadar GET request (Used for Live Status & Schedule) */
+/** Perform a RailRadar GET request (Used for Live Status, Schedule & Between) */
 async function railRadarFetch(url) {
   const res = await fetch(url, {
     method: "GET",
@@ -44,21 +43,14 @@ async function getLiveStatus(trainNumber, dateYYYYMMDD) {
     await fakeDelay();
     return { ...DEMO.liveStatus, trainNumber, demo: true };
   }
-  // Use the new RailRadar fetch function
   const raw = await railRadarFetch(
     CONFIG.ENDPOINTS.trainStatus(trainNumber, dateYYYYMMDD)
   );
   return normalizeLiveStatus(raw, trainNumber);
 }
 
-/**
- * Normalize the live-status payload. Extended to support both 
- * the old RapidAPI h5 structure and the new RailRadar structure.
- */
 function normalizeLiveStatus(raw, trainNumber) {
   const body = raw?.body ?? raw?.data ?? raw ?? {};
-  
-  // Look for RailRadar's 'route' array or RapidAPI's 'stations'
   const stationsRaw =
     pick(body.route, body.stations, body.station_list, body.stationList, raw?.stations) || [];
 
@@ -73,7 +65,6 @@ function normalizeLiveStatus(raw, trainNumber) {
 
   let seenCurrent = false;
   const stations = stationsRaw.map((s) => {
-    // RailRadar nests station details inside a "station" object
     const stn = s.station || s;
     const code = pick(stn.code, stn.stationCode, stn.station_code, "?");
     const isCurrent = currentCode ? code === currentCode : false;
@@ -122,7 +113,6 @@ async function getTrainInfo(trainNumber) {
     await fakeDelay();
     return { ...DEMO.trainInfo, trainNumber, demo: true };
   }
-  // Use the new RailRadar fetch function
   const raw = await railRadarFetch(
     CONFIG.ENDPOINTS.trainSearch(trainNumber)
   );
@@ -136,7 +126,6 @@ function normalizeTrainInfo(raw, trainNumber) {
 
   const schedRaw = pick(t.route, t.schedule, t.stations, []) || [];
   const stations = schedRaw.map((s) => {
-    // RailRadar nests station details inside a "station" object
     const stn = s.station || s;
     return {
       code: pick(stn.code, stn.stationCode, stn.station_code, "?"),
@@ -167,14 +156,13 @@ function normalizeTrainInfo(raw, trainNumber) {
 }
 
 /* ------------------------------------------------------------
-   PNR status (Untouched - Keeps using RapidAPI)
+   PNR status
    ------------------------------------------------------------ */
 async function getPNRStatus(pnr) {
   if (IS_DEMO) {
     await fakeDelay();
     return { ...DEMO.pnr, pnr, demo: true };
   }
-  // Still uses rapidFetch and targets the PNR host
   const raw = await rapidFetch(CONFIG.ENDPOINTS.pnrStatus(pnr), CONFIG.HOSTS.PNR);
   return normalizePNR(raw, pnr);
 }
@@ -206,10 +194,41 @@ function normalizePNR(raw, pnr) {
 }
 
 /* ------------------------------------------------------------
-   Features without a dedicated API on the current plan —
-   served from the bundled dataset (clearly labeled in the UI).
+   Trains Between Stations (Real API)
    ------------------------------------------------------------ */
-async function getTrainsBetween() { await fakeDelay(); return DEMO.between; }
+async function getTrainsBetween(from, to) {
+  if (IS_DEMO) {
+    await fakeDelay();
+    return DEMO.between;
+  }
+  
+  try {
+    const raw = await railRadarFetch(CONFIG.ENDPOINTS.trainsBetween(from, to));
+    return normalizeTrainsBetween(raw);
+  } catch (error) {
+    console.error("Trains Between API failed:", error);
+    return DEMO.between; 
+  }
+}
+
+function normalizeTrainsBetween(raw) {
+  const body = raw?.body ?? raw?.data ?? raw ?? {};
+  const trainsList = pick(body.trains, body.trainList, body.train_list, []) || [];
+
+  return trainsList.map((t) => ({
+    trainNumber: pick(t.trainNumber, t.train_number, t.train?.number, "-"),
+    trainName: pick(t.trainName, t.train_name, t.train?.name, "Unknown Train"),
+    departure: pick(t.departureTime, t.departure_time, t.dep, "--:--"),
+    arrival: pick(t.arrivalTime, t.arrival_time, t.arr, "--:--"),
+    duration: pick(t.duration, t.travelTime, t.travel_time, "--h --m"),
+    runDays: pick(t.runDays, t.runningDays, t.run_days, t.train?.runDays, []) || [],
+  }));
+}
+
+/* ------------------------------------------------------------
+   Features without a dedicated API on the current plan —
+   served from the bundled dataset.
+   ------------------------------------------------------------ */
 async function getStationBoard()  { await fakeDelay(); return DEMO.board; }
 async function getNearbyStations(){ await fakeDelay(); return DEMO.nearby; }
 async function getSeatAvailability() { await fakeDelay(); return DEMO.seats; }
