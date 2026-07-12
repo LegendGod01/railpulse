@@ -1,29 +1,25 @@
 /* ============================================================
    API layer — wraps the endpoints with the Fetch API and 
    normalizes responses for the UI.
+
+   All requests go to our own /api/* serverless functions (see
+   /api). Those functions hold the real API keys server-side, via
+   Vercel environment variables, and forward the request upstream.
+   The browser never sees a key.
    ============================================================ */
 
-async function rapidFetch(url, host) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "x-rapidapi-key": CONFIG.RAPIDAPI_KEY,
-      "x-rapidapi-host": host,
-    },
-  });
-  if (!res.ok) throw new Error(`RapidAPI error ${res.status}`);
-  return res.json();
-}
-
-async function railRadarFetch(url) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${CONFIG.RAILRADAR_KEY}`
-    },
-  });
-  if (!res.ok) throw new Error(`RailRadar error ${res.status}`);
-  return res.json();
+async function apiFetch(url) {
+  const res = await fetch(url);
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    throw new Error(`Bad response from ${url} (status ${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error(body?.error || `Request failed (status ${res.status})`);
+  }
+  return body;
 }
 
 function pick(...vals) {
@@ -31,16 +27,20 @@ function pick(...vals) {
   return undefined;
 }
 
+/** Tag a fallback result so the UI can show an honest "sample data" notice
+ *  only when it's actually showing sample data. */
+function tagDemo(value, isDemo) {
+  if (Array.isArray(value)) value.demo = isDemo;
+  else if (value && typeof value === "object") value.demo = isDemo;
+  return value;
+}
+
 /* ------------------------------------------------------------
    Live train status (RailRadar)
    ------------------------------------------------------------ */
 async function getLiveStatus(trainNumber, dateYYYYMMDD) {
-  if (IS_DEMO) {
-    await fakeDelay();
-    return { ...DEMO.liveStatus, trainNumber, demo: true };
-  }
-  const raw = await railRadarFetch(CONFIG.ENDPOINTS.trainStatus(trainNumber, dateYYYYMMDD));
-  return normalizeLiveStatus(raw, trainNumber);
+  const raw = await apiFetch(CONFIG.ENDPOINTS.trainStatus(trainNumber, dateYYYYMMDD));
+  return tagDemo(normalizeLiveStatus(raw, trainNumber), false);
 }
 
 function normalizeLiveStatus(raw, trainNumber) {
@@ -99,12 +99,8 @@ function normalizeLiveStatus(raw, trainNumber) {
    Train search / schedule (RailRadar)
    ------------------------------------------------------------ */
 async function getTrainInfo(trainNumber) {
-  if (IS_DEMO) {
-    await fakeDelay();
-    return { ...DEMO.trainInfo, trainNumber, demo: true };
-  }
-  const raw = await railRadarFetch(CONFIG.ENDPOINTS.trainSearch(trainNumber));
-  return normalizeTrainInfo(raw, trainNumber);
+  const raw = await apiFetch(CONFIG.ENDPOINTS.trainSearch(trainNumber));
+  return tagDemo(normalizeTrainInfo(raw, trainNumber), false);
 }
 
 function normalizeTrainInfo(raw, trainNumber) {
@@ -147,12 +143,8 @@ function normalizeTrainInfo(raw, trainNumber) {
    PNR status (RapidAPI)
    ------------------------------------------------------------ */
 async function getPNRStatus(pnr) {
-  if (IS_DEMO) {
-    await fakeDelay();
-    return { ...DEMO.pnr, pnr, demo: true };
-  }
-  const raw = await rapidFetch(CONFIG.ENDPOINTS.pnrStatus(pnr), CONFIG.HOSTS.PNR);
-  return normalizePNR(raw, pnr);
+  const raw = await apiFetch(CONFIG.ENDPOINTS.pnrStatus(pnr));
+  return tagDemo(normalizePNR(raw, pnr), false);
 }
 
 function normalizePNR(raw, pnr) {
@@ -182,19 +174,16 @@ function normalizePNR(raw, pnr) {
 }
 
 /* ------------------------------------------------------------
-   Live Station Board (New - RapidAPI)
+   Live Station Board (RapidAPI)
    ------------------------------------------------------------ */
 async function getStationBoard(code) {
-  if (IS_DEMO) {
-    await fakeDelay();
-    return DEMO.board;
-  }
   try {
-    const raw = await rapidFetch(CONFIG.ENDPOINTS.stationBoard(code), CONFIG.HOSTS.STATION_BOARD);
-    return normalizeStationBoard(raw);
+    const raw = await apiFetch(CONFIG.ENDPOINTS.stationBoard(code));
+    return tagDemo(normalizeStationBoard(raw), false);
   } catch (error) {
     console.error("Station Board API failed:", error);
-    return DEMO.board;
+    lastApiError = error.message;
+    return tagDemo([...DEMO.board], true);
   }
 }
 
@@ -212,25 +201,23 @@ function normalizeStationBoard(raw) {
    Trains Between Stations (RailKit via Vercel API)
    ------------------------------------------------------------ */
 async function getTrainsBetween(from, to) {
-  if (IS_DEMO) {
-    await fakeDelay();
-    return DEMO.between;
-  }
   try {
     const res = await fetch(`/api/railkit?action=search&from=${from}&to=${to}`);
     const raw = await res.json();
+    if (!res.ok) throw new Error(raw?.error || `RailKit search failed (status ${res.status})`);
     const data = raw?.data || raw || [];
-    return data.map((t) => ({
+    return tagDemo(data.map((t) => ({
       trainNumber: pick(t.trainNumber, t.number, "-"),
       trainName: pick(t.trainName, t.name, "Unknown Train"),
       departure: pick(t.departureTime, t.dep, "--:--"),
       arrival: pick(t.arrivalTime, t.arr, "--:--"),
       duration: pick(t.duration, "--h --m"),
       runDays: pick(t.runDays, t.days, []),
-    }));
+    })), false);
   } catch (error) {
     console.error("RailKit Search failed:", error);
-    return DEMO.between; 
+    lastApiError = error.message;
+    return tagDemo([...DEMO.between], true);
   }
 }
 
@@ -238,7 +225,6 @@ async function getTrainsBetween(from, to) {
    Seat Availability & Fare (Powered by RailKit API)
    ------------------------------------------------------------ */
 async function getSeatAvailability(train, cls) {
-  if (IS_DEMO) { await fakeDelay(); return DEMO.seats; }
   try {
     // UI does not have From, To, and Date inputs.
     // Fetching train route to set tomorrow's date dynamically.
@@ -252,23 +238,24 @@ async function getSeatAvailability(train, cls) {
 
     const res = await fetch(`/api/railkit?action=seats&train=${train}&from=${from}&to=${to}&date=${date}&cls=${cls}&quota=GN`);
     const raw = await res.json();
+    if (!res.ok) throw new Error(raw?.error || `RailKit seats failed (status ${res.status})`);
     
     const data = raw?.data || raw || [];
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return tagDemo([], false);
     
-    return data.map(item => ({
+    return tagDemo(data.map(item => ({
       date: pick(item.date, item.journeyDate, "--"),
       status: pick(item.status, item.currentStatus, "N/A"),
       chance: pick(item.probability, item.confirmationChance, ""),
-    }));
+    })), false);
   } catch (error) {
     console.error("Seats API failed:", error);
-    return DEMO.seats;
+    lastApiError = error.message;
+    return tagDemo([...DEMO.seats], true);
   }
 }
 
 async function getFares(train) {
-  if (IS_DEMO) { await fakeDelay(); return DEMO.fares; }
   try {
     const info = await getTrainInfo(train);
     const from = info.source;
@@ -277,22 +264,28 @@ async function getFares(train) {
     
     const res = await fetch(`/api/railkit?action=fare&train=${train}&from=${from}&to=${to}&cls=${cls}&quota=GN`);
     const raw = await res.json();
+    if (!res.ok) throw new Error(raw?.error || `RailKit fare failed (status ${res.status})`);
     
     const d = raw?.data || raw || {};
-    return [
+    return tagDemo([
       { label: "Base Fare", value: `₹${pick(d.baseFare, d.base_fare, 0)}` },
       { label: "Reservation", value: `₹${pick(d.reservationCharge, d.reservation_charge, 0)}` },
       { label: "Superfast", value: `₹${pick(d.superfastCharge, d.superfast_charge, 0)}` },
       { label: "GST", value: `₹${pick(d.gst, d.tax, 0)}` },
       { label: "Total", value: `₹${pick(d.totalFare, d.total_fare, d.total, 0)}`, isTotal: true }
-    ];
+    ], false);
   } catch (error) {
     console.error("Fare API failed:", error);
-    return DEMO.fares;
+    lastApiError = error.message;
+    return tagDemo([...DEMO.fares], true);
   }
 }
 
 async function getAlerts() { return DEMO.alerts; }
+
+/** Holds the message from the most recent failed live request, so the UI
+ *  can show *why* it fell back to sample data instead of staying silent. */
+let lastApiError = null;
 
 /** Small artificial latency so loading skeletons are visible. */
 function fakeDelay(ms = 650) {
