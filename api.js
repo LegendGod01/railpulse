@@ -8,6 +8,14 @@
    The browser never sees a key.
    ============================================================ */
 
+function extractErrorMessage(body, status) {
+  const e = body?.error;
+  if (!e) return `Request failed (status ${status})`;
+  if (typeof e === "string") return e;
+  if (typeof e === "object") return e.message || e.code || JSON.stringify(e);
+  return String(e);
+}
+
 async function apiFetch(url) {
   const res = await fetch(url);
   let body;
@@ -16,8 +24,8 @@ async function apiFetch(url) {
   } catch {
     throw new Error(`Bad response from ${url} (status ${res.status})`);
   }
-  if (!res.ok) {
-    throw new Error(body?.error || `Request failed (status ${res.status})`);
+  if (!res.ok || body?.success === false) {
+    throw new Error(extractErrorMessage(body, res.status));
   }
   return body;
 }
