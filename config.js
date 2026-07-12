@@ -1,41 +1,31 @@
 /* ============================================================
    RailPulse configuration
    ------------------------------------------------------------
-   Live Status & Search: RailRadar
-   PNR Status: RapidAPI (irctc-indian-railway-pnr-status)
-   Station Board: RapidAPI (irctc-api5)
+   Live Status & Search: RailRadar (proxied via /api)
+   PNR Status: RapidAPI (proxied via /api)
+   Station Board: RapidAPI (proxied via /api)
+
+   No API keys live here anymore — they're read from Vercel
+   environment variables inside the /api/* serverless functions,
+   so they're never shipped to the browser.
    ============================================================ */
 
 const CONFIG = {
-  RAILRADAR_KEY: "rg_8949916f4dce412c907825db35789d7f",
-  RAPIDAPI_KEY: "26a4b0b475msh19ec367a28a5999p1c0f0cjsn5bdd2a32d2fc",
-
-  HOSTS: {
-    LIVE_STATUS: "api.railradar.in",
-    PNR: "irctc-indian-railway-pnr-status.p.rapidapi.com",
-    STATION_BOARD: "irctc-api5.p.rapidapi.com",
-  },
-
   ENDPOINTS: {
-    trainStatus: (trainNumber, dateYYYYMMDD) => {
-      const date = dateYYYYMMDD.length === 8 
-        ? `${dateYYYYMMDD.slice(0,4)}-${dateYYYYMMDD.slice(4,6)}-${dateYYYYMMDD.slice(6,8)}` 
-        : dateYYYYMMDD;
-      return `https://api.railradar.in/v1/trains/${trainNumber}/live?date=${date}`;
-    },
-    
+    trainStatus: (trainNumber, dateYYYYMMDD) =>
+      `/api/live-status?train=${trainNumber}&date=${dateYYYYMMDD}`,
+
     trainSearch: (trainNumber) =>
-      `https://api.railradar.in/v1/trains/${trainNumber}?haltsOnly=true`,
-      
-    trainsBetween: (from, to) => 
-      `https://api.railradar.in/v1/trains/between?source=${from}&destination=${to}`,
-      
+      `/api/train-info?train=${trainNumber}`,
+
     pnrStatus: (pnr) =>
-      `https://irctc-indian-railway-pnr-status.p.rapidapi.com/getPNRStatus/${pnr}`,
-      
-    stationBoard: (code) => 
-      `https://irctc-api5.p.rapidapi.com/station-live/${code}`,
+      `/api/pnr?pnr=${pnr}`,
+
+    stationBoard: (code) =>
+      `/api/station-board?code=${code}`,
   },
 };
 
-const IS_DEMO = !CONFIG.RAILRADAR_KEY || !CONFIG.RAPIDAPI_KEY;
+// Demo mode is now toggled per-request based on whether a call actually
+// fails, not on whether a key string is present client-side (see api.js).
+const IS_DEMO = false;
