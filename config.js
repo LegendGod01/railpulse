@@ -1,32 +1,40 @@
 /* ============================================================
    RailPulse configuration
    ------------------------------------------------------------
-   1. Paste your RapidAPI key below (between the quotes).
-   2. That's it — the app automatically switches from DEMO
-      mode to LIVE mode when a real key is present.
+   Updated to use RailRadar for Train Status & Search,
+   while keeping RapidAPI for PNR (RailRadar doesn't support PNR yet).
    ============================================================ */
 
 const CONFIG = {
-  // <<< PASTE YOUR KEY HERE >>>
+  // New RailRadar Key for Live Status & Search
+  RAILRADAR_KEY: "rg_8949916f4dce412c907825db35789d7f",
+  
+  // Old RapidAPI Key for PNR Status only
   RAPIDAPI_KEY: "26a4b0b475msh19ec367a28a5999p1c0f0cjsn5bdd2a32d2fc",
 
-  // Existing RapidAPI hosts — do not change
   HOSTS: {
-    LIVE_STATUS: "indian-railway-irctc.p.rapidapi.com",
+    LIVE_STATUS: "api.railradar.in",
     PNR: "irctc-indian-railway-pnr-status.p.rapidapi.com",
   },
 
-  // Existing endpoints — do not change
   ENDPOINTS: {
-    trainStatus: (trainNumber, dateYYYYMMDD) =>
-      `https://indian-railway-irctc.p.rapidapi.com/api/trains/v1/train/status?train_number=${trainNumber}&departure_date=${dateYYYYMMDD}&isH5=true&client=web`,
+    // RailRadar Live Status (Auto-formats YYYYMMDD to YYYY-MM-DD)
+    trainStatus: (trainNumber, dateYYYYMMDD) => {
+      const date = dateYYYYMMDD.length === 8 
+        ? `${dateYYYYMMDD.slice(0,4)}-${dateYYYYMMDD.slice(4,6)}-${dateYYYYMMDD.slice(6,8)}` 
+        : dateYYYYMMDD;
+      return `https://api.railradar.in/v1/trains/${trainNumber}/live?date=${date}`;
+    },
+    
+    // RailRadar Train Schedule/Search
     trainSearch: (trainNumber) =>
-      `https://indian-railway-irctc.p.rapidapi.com/api/trains-search/v1/train/${trainNumber}?isH5=true&client=web`,
+      `https://api.railradar.in/v1/trains/${trainNumber}?haltsOnly=true`,
+      
+    // RapidAPI PNR Status (Unchanged)
     pnrStatus: (pnr) =>
       `https://irctc-indian-railway-pnr-status.p.rapidapi.com/getPNRStatus/${pnr}`,
   },
 };
 
-// True when no real key has been configured — the app then
-// serves realistic demo data so every feature is explorable.
-const IS_DEMO = !CONFIG.RAPIDAPI_KEY || CONFIG.RAPIDAPI_KEY === "YOUR_RAPIDAPI_KEY_HERE";
+// True when no real keys have been configured
+const IS_DEMO = !CONFIG.RAILRADAR_KEY || !CONFIG.RAPIDAPI_KEY;
