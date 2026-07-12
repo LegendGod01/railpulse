@@ -269,8 +269,12 @@ async function getFares(train) {
     const from = info.source;
     const to = info.destination;
     const cls = "3A"; // Default class
+
+    const tmrw = new Date();
+    tmrw.setDate(tmrw.getDate() + 1);
+    const date = `${String(tmrw.getDate()).padStart(2, '0')}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${tmrw.getFullYear()}`;
     
-    const res = await fetch(`/api/railkit?action=fare&train=${train}&from=${from}&to=${to}&cls=${cls}&quota=GN`);
+    const res = await fetch(`/api/railkit?action=fare&train=${train}&from=${from}&to=${to}&date=${date}&cls=${cls}&quota=GN`);
     const raw = await res.json();
     if (!res.ok) throw new Error(raw?.error || `RailKit fare failed (status ${res.status})`);
     
