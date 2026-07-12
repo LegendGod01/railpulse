@@ -8,7 +8,7 @@
 
 const CONFIG = {
   // <<< PASTE YOUR KEY HERE >>>
-  RAPIDAPI_KEY: "YOUR_RAPIDAPI_KEY_HERE",
+  RAPIDAPI_KEY: "26a4b0b475msh19ec367a28a5999p1c0f0cjsn5bdd2a32d2fc",
 
   // Existing RapidAPI hosts — do not change
   HOSTS: {
