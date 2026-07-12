@@ -118,7 +118,7 @@ function initLive() {
       renderLive(out, data);
     } catch (err) {
       console.error(err);
-      errorNotice(out, "Could not fetch live status. Check the train number, date and your API key.");
+      errorNotice(out, `Could not fetch live status: ${err.message}`);
     }
   });
 }
@@ -215,7 +215,7 @@ function initPNR() {
       renderPNR(out, d);
     } catch (err) {
       console.error(err);
-      errorNotice(out, "Could not fetch PNR status. Check the PNR number and your API key.");
+      errorNotice(out, `Could not fetch PNR status: ${err.message}`);
     }
   });
 }
@@ -272,7 +272,7 @@ function initTrains() {
       renderTrainInfo(out, d);
     } catch (err) {
       console.error(err);
-      errorNotice(out, "Could not fetch train details. Check the train number and your API key.");
+      errorNotice(out, `Could not fetch train details: ${err.message}`);
     }
   });
 }
