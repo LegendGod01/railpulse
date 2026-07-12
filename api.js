@@ -209,7 +209,7 @@ function normalizeStationBoard(raw) {
 }
 
 /* ------------------------------------------------------------
-   Trains Between Stations (RailRadar)
+   Trains Between Stations (RailKit via Vercel API)
    ------------------------------------------------------------ */
 async function getTrainsBetween(from, to) {
   if (IS_DEMO) {
@@ -217,26 +217,21 @@ async function getTrainsBetween(from, to) {
     return DEMO.between;
   }
   try {
-    const raw = await railRadarFetch(CONFIG.ENDPOINTS.trainsBetween(from, to));
-    return normalizeTrainsBetween(raw);
+    const res = await fetch(`/api/railkit?action=search&from=${from}&to=${to}`);
+    const raw = await res.json();
+    const data = raw?.data || raw || [];
+    return data.map((t) => ({
+      trainNumber: pick(t.trainNumber, t.number, "-"),
+      trainName: pick(t.trainName, t.name, "Unknown Train"),
+      departure: pick(t.departureTime, t.dep, "--:--"),
+      arrival: pick(t.arrivalTime, t.arr, "--:--"),
+      duration: pick(t.duration, "--h --m"),
+      runDays: pick(t.runDays, t.days, []),
+    }));
   } catch (error) {
-    console.error("Trains Between API failed:", error);
+    console.error("RailKit Search failed:", error);
     return DEMO.between; 
   }
-}
-
-function normalizeTrainsBetween(raw) {
-  const body = raw?.body ?? raw?.data ?? raw ?? {};
-  const trainsList = pick(body.trains, body.trainList, body.train_list, []) || [];
-
-  return trainsList.map((t) => ({
-    trainNumber: pick(t.trainNumber, t.train_number, t.train?.number, "-"),
-    trainName: pick(t.trainName, t.train_name, t.train?.name, "Unknown Train"),
-    departure: pick(t.departureTime, t.departure_time, t.dep, "--:--"),
-    arrival: pick(t.arrivalTime, t.arrival_time, t.arr, "--:--"),
-    duration: pick(t.duration, t.travelTime, t.travel_time, "--h --m"),
-    runDays: pick(t.runDays, t.runningDays, t.run_days, t.train?.runDays, []) || [],
-  }));
 }
 
 /* ------------------------------------------------------------
