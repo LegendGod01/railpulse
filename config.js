@@ -1,20 +1,19 @@
 /* ============================================================
    RailPulse configuration
    ------------------------------------------------------------
-   Updated to use RailRadar for Train Status, Search & Between Stations
-   while keeping RapidAPI for PNR.
+   Live Status & Search: RailRadar
+   PNR Status: RapidAPI (irctc-indian-railway-pnr-status)
+   Station Board: RapidAPI (irctc-api5)
    ============================================================ */
 
 const CONFIG = {
-  // RailRadar Key for Live Status, Search, and Between Stations
   RAILRADAR_KEY: "rg_8949916f4dce412c907825db35789d7f",
-  
-  // RapidAPI Key for PNR Status only
   RAPIDAPI_KEY: "26a4b0b475msh19ec367a28a5999p1c0f0cjsn5bdd2a32d2fc",
 
   HOSTS: {
     LIVE_STATUS: "api.railradar.in",
     PNR: "irctc-indian-railway-pnr-status.p.rapidapi.com",
+    STATION_BOARD: "irctc-api5.p.rapidapi.com",
   },
 
   ENDPOINTS: {
@@ -33,6 +32,9 @@ const CONFIG = {
       
     pnrStatus: (pnr) =>
       `https://irctc-indian-railway-pnr-status.p.rapidapi.com/getPNRStatus/${pnr}`,
+      
+    stationBoard: (code) => 
+      `https://irctc-api5.p.rapidapi.com/station-live/${code}`,
   },
 };
 
