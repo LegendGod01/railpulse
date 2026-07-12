@@ -5,7 +5,7 @@
    configured or a request fails.
    ============================================================ */
 
-/** Perform a RapidAPI GET request with the required headers. */
+/** Perform a RapidAPI GET request (Used for PNR Status) */
 async function rapidFetch(url, host) {
   const res = await fetch(url, {
     method: "GET",
@@ -14,7 +14,19 @@ async function rapidFetch(url, host) {
       "x-rapidapi-host": host,
     },
   });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+  if (!res.ok) throw new Error(`RapidAPI error ${res.status}`);
+  return res.json();
+}
+
+/** Perform a RailRadar GET request (Used for Live Status & Schedule) */
+async function railRadarFetch(url) {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${CONFIG.RAILRADAR_KEY}`
+    },
+  });
+  if (!res.ok) throw new Error(`RailRadar error ${res.status}`);
   return res.json();
 }
 
@@ -26,51 +38,57 @@ function pick(...vals) {
 
 /* ------------------------------------------------------------
    Live train status
-   GET /api/trains/v1/train/status?train_number=&departure_date=&isH5=true&client=web
    ------------------------------------------------------------ */
 async function getLiveStatus(trainNumber, dateYYYYMMDD) {
   if (IS_DEMO) {
     await fakeDelay();
     return { ...DEMO.liveStatus, trainNumber, demo: true };
   }
-  const raw = await rapidFetch(
-    CONFIG.ENDPOINTS.trainStatus(trainNumber, dateYYYYMMDD),
-    CONFIG.HOSTS.LIVE_STATUS
+  // Use the new RailRadar fetch function
+  const raw = await railRadarFetch(
+    CONFIG.ENDPOINTS.trainStatus(trainNumber, dateYYYYMMDD)
   );
   return normalizeLiveStatus(raw, trainNumber);
 }
 
 /**
- * Normalize the live-status payload. The IRCTC h5 API nests data
- * under `body`; we defensively probe common field names so minor
- * upstream shape changes don't break the UI.
+ * Normalize the live-status payload. Extended to support both 
+ * the old RapidAPI h5 structure and the new RailRadar structure.
  */
 function normalizeLiveStatus(raw, trainNumber) {
   const body = raw?.body ?? raw?.data ?? raw ?? {};
+  
+  // Look for RailRadar's 'route' array or RapidAPI's 'stations'
   const stationsRaw =
-    pick(body.stations, body.station_list, body.stationList, raw?.stations) || [];
+    pick(body.route, body.stations, body.station_list, body.stationList, raw?.stations) || [];
 
   const currentCode = pick(
-    body.current_station_code, body.currentStationCode, body.current_station
+    body.currentLocation?.station?.code, body.currentLocation?.stationCode, body.current_station_code, body.currentStationCode, body.current_station
   );
-  const delayStr = String(pick(body.train_status_message, body.delay, "") || "");
+  
+  const delayVal = pick(body.currentLocation?.delay, body.delay, body.train_status_message, "");
+  const delayStr = String(delayVal || "");
   const delayMatch = delayStr.match(/(\d+)\s*min/i);
+  const numericDelay = typeof delayVal === "number" ? delayVal : (delayMatch ? parseInt(delayMatch[1], 10) : 0);
 
   let seenCurrent = false;
   const stations = stationsRaw.map((s) => {
-    const code = pick(s.stationCode, s.station_code, s.code, "?");
+    // RailRadar nests station details inside a "station" object
+    const stn = s.station || s;
+    const code = pick(stn.code, stn.stationCode, stn.station_code, "?");
     const isCurrent = currentCode ? code === currentCode : false;
     if (isCurrent) seenCurrent = true;
+    
     return {
       code,
-      name: pick(s.stationName, s.station_name, s.name, code),
+      name: pick(stn.name, stn.stationName, stn.station_name, code),
       arr: pick(s.arrivalTime, s.arrival_time, s.sta, "--"),
       dep: pick(s.departureTime, s.departure_time, s.std, "--"),
-      platform: pick(s.expected_platform, s.platform, s.platformNumber, "-"),
-      delay: parseInt(pick(s.arrivalDelay, s.delay, 0), 10) || 0,
+      platform: pick(s.platform, s.expected_platform, s.platformNumber, "-"),
+      delay: parseInt(pick(s.delay, s.arrivalDelay, 0), 10) || 0,
       distance: parseInt(pick(s.distance, s.distance_from_source, 0), 10) || 0,
       day: parseInt(pick(s.dayCount, s.day, 1), 10) || 1,
-      passed: Boolean(pick(s.hasArrived, s.has_arrived, false)) || (!seenCurrent && Boolean(currentCode)),
+      passed: Boolean(pick(s.hasArrived, s.has_arrived, s.departed, false)) || (!seenCurrent && Boolean(currentCode)),
       current: isCurrent,
     };
   });
@@ -81,33 +99,32 @@ function normalizeLiveStatus(raw, trainNumber) {
 
   return {
     trainNumber,
-    trainName: pick(body.train_name, body.trainName, raw?.train_name, `Train ${trainNumber}`),
-    source: stations[0]?.code || "-",
-    destination: last?.code || "-",
-    delayMinutes: delayMatch ? parseInt(delayMatch[1], 10) : (stations[currentIdx]?.delay ?? 0),
-    statusText: pick(body.train_status_message, body.status, "Running"),
+    trainName: pick(body.train?.name, body.train_name, body.trainName, raw?.train_name, `Train ${trainNumber}`),
+    source: pick(body.train?.source?.code, stations[0]?.code, "-"),
+    destination: pick(body.train?.destination?.code, last?.code, "-"),
+    delayMinutes: numericDelay || (stations[currentIdx]?.delay ?? 0),
+    statusText: pick(body.status, body.train_status_message, "Running"),
     currentStationCode: currentCode || stations[currentIdx]?.code,
     totalDistance: last?.distance || 0,
     distanceCovered: covered,
     etaFinal: last?.arr || "--",
-    speed: parseInt(pick(body.speed, body.avg_speed, 0), 10) || null,
+    speed: parseInt(pick(body.currentLocation?.speed, body.speed, body.avg_speed, 0), 10) || null,
     stations,
-    coachPosition: DEMO.liveStatus.coachPosition, // rake layout (typical composition)
+    coachPosition: DEMO.liveStatus.coachPosition, 
   };
 }
 
 /* ------------------------------------------------------------
    Train search / schedule
-   GET /api/trains-search/v1/train/{train_number}?isH5=true&client=web
    ------------------------------------------------------------ */
 async function getTrainInfo(trainNumber) {
   if (IS_DEMO) {
     await fakeDelay();
     return { ...DEMO.trainInfo, trainNumber, demo: true };
   }
-  const raw = await rapidFetch(
-    CONFIG.ENDPOINTS.trainSearch(trainNumber),
-    CONFIG.HOSTS.LIVE_STATUS
+  // Use the new RailRadar fetch function
+  const raw = await railRadarFetch(
+    CONFIG.ENDPOINTS.trainSearch(trainNumber)
   );
   return normalizeTrainInfo(raw, trainNumber);
 }
@@ -115,45 +132,49 @@ async function getTrainInfo(trainNumber) {
 function normalizeTrainInfo(raw, trainNumber) {
   const body = raw?.body ?? raw?.data ?? raw ?? {};
   const trains = pick(body.trains, body.train_list, []) || [];
-  const t = Array.isArray(trains) ? (trains[0] ?? body) : body;
+  const t = Array.isArray(trains) && trains.length ? trains[0] : body;
 
-  const schedRaw = pick(t.schedule, t.stations, t.route, []) || [];
-  const stations = schedRaw.map((s) => ({
-    code: pick(s.stationCode, s.station_code, s.code, "?"),
-    name: pick(s.stationName, s.station_name, s.name, "?"),
-    arr: pick(s.arrivalTime, s.arrival_time, s.sta, "--"),
-    dep: pick(s.departureTime, s.departure_time, s.std, "--"),
-    distance: parseInt(pick(s.distance, 0), 10) || 0,
-    day: parseInt(pick(s.dayCount, s.day, 1), 10) || 1,
-    platform: pick(s.platform, s.expected_platform, "-"),
-  }));
+  const schedRaw = pick(t.route, t.schedule, t.stations, []) || [];
+  const stations = schedRaw.map((s) => {
+    // RailRadar nests station details inside a "station" object
+    const stn = s.station || s;
+    return {
+      code: pick(stn.code, stn.stationCode, stn.station_code, "?"),
+      name: pick(stn.name, stn.stationName, stn.station_name, "?"),
+      arr: pick(s.arrivalTime, s.arrival_time, s.sta, "--"),
+      dep: pick(s.departureTime, s.departure_time, s.std, "--"),
+      distance: parseInt(pick(s.distance, 0), 10) || 0,
+      day: parseInt(pick(s.day, s.dayCount, 1), 10) || 1,
+      platform: pick(s.platform, s.expected_platform, "-"),
+    };
+  });
 
   return {
     trainNumber,
-    trainName: pick(t.trainName, t.train_name, `Train ${trainNumber}`),
-    source: pick(t.origin, t.source, t.from, stations[0]?.code, "-"),
-    sourceName: pick(t.originName, stations[0]?.name, "-"),
-    destination: pick(t.destination, t.to, stations[stations.length - 1]?.code, "-"),
-    destinationName: pick(t.destinationName, stations[stations.length - 1]?.name, "-"),
+    trainName: pick(t.train?.name, t.trainName, t.train_name, `Train ${trainNumber}`),
+    source: pick(t.train?.source?.code, t.origin, t.source, t.from, stations[0]?.code, "-"),
+    sourceName: pick(t.train?.source?.name, t.originName, stations[0]?.name, "-"),
+    destination: pick(t.train?.destination?.code, t.destination, t.to, stations[stations.length - 1]?.code, "-"),
+    destinationName: pick(t.train?.destination?.name, t.destinationName, stations[stations.length - 1]?.name, "-"),
     departure: pick(t.departureTime, t.departure_time, stations[0]?.dep, "--"),
     arrival: pick(t.arrivalTime, t.arrival_time, stations[stations.length - 1]?.arr, "--"),
     duration: pick(t.duration, t.travel_time, "--"),
-    runDays: pick(t.runningDays, t.run_days, t.days, []) || [],
-    classes: pick(t.availableClasses, t.classes, []) || [],
-    type: pick(t.trainType, t.train_type, ""),
+    runDays: pick(t.train?.runDays, t.runningDays, t.run_days, t.days, []) || [],
+    classes: pick(t.train?.classes, t.availableClasses, t.classes, []) || [],
+    type: pick(t.train?.type, t.trainType, t.train_type, ""),
     stations,
   };
 }
 
 /* ------------------------------------------------------------
-   PNR status
-   GET /getPNRStatus/{pnr}
+   PNR status (Untouched - Keeps using RapidAPI)
    ------------------------------------------------------------ */
 async function getPNRStatus(pnr) {
   if (IS_DEMO) {
     await fakeDelay();
     return { ...DEMO.pnr, pnr, demo: true };
   }
+  // Still uses rapidFetch and targets the PNR host
   const raw = await rapidFetch(CONFIG.ENDPOINTS.pnrStatus(pnr), CONFIG.HOSTS.PNR);
   return normalizePNR(raw, pnr);
 }
