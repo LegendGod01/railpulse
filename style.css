@@ -360,8 +360,11 @@ html[data-theme="light"] .icon-sun { display: none; }
   .quick-grid { grid-template-columns: repeat(4, 1fr); }
   .hero-title { font-size: 1.8rem; }
 }
+add-developer-credit
 
 
+
+main
 /* ---------- Developer credit ---------- */
 .brand-credit {
   color: var(--primary); font-weight: 700; text-decoration: none;
