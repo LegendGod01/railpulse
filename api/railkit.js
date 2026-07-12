@@ -1,7 +1,6 @@
-import { configure, getAvailability, fareLookup } from "railkit";
+import { configure, getAvailability, fareLookup, searchTrains } from "railkit";
 
 export default async function handler(req, res) {
-  // Configure RailKit API Key
   configure("railkit_1aa8673844c151bdcb5fe3649a97ad4afda29d802f38fee7");
 
   const { action, train, from, to, date, cls, quota } = req.query;
@@ -14,6 +13,12 @@ export default async function handler(req, res) {
     
     if (action === "fare") {
       const data = await fareLookup(train, from, to, cls, quota || "GN");
+      return res.status(200).json(data);
+    }
+
+    if (action === "search") {
+      // RailKit search function
+      const data = await searchTrains(from, to);
       return res.status(200).json(data);
     }
 
